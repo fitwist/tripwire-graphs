@@ -38,9 +38,6 @@ logging.info("="*50)
 
 app = FastAPI()
 
-# Добавляем обработку статических файлов
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
 # Middleware для логирования запросов
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
