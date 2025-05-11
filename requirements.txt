@@ -7,7 +7,6 @@ kaleido==0.2.1
 fastapi==0.115.6
 uvicorn==0.33.0
 load-dotenv==0.1.0
-httptools==0.1.0
 uvloop==0.21.0
 urllib3==1.26.14
 brotli==1.0.9
