@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, Response
 from fastapi.responses import JSONResponse
 from os import environ as env
 from pydantic import BaseModel
@@ -195,6 +195,7 @@ async def get_favicon():
 
 @app.post("/chart/")
 async def build_chart(data: ChartData):
+    img_path = None
     try:
         data_dict = data.dict()
         data_lst = list(data_dict.values())
@@ -202,22 +203,35 @@ async def build_chart(data: ChartData):
         # Получаем путь к файлу
         img_path = create_chart(data_lst)
         
-        # Возвращаем файл напрямую
-        return FileResponse(
-            img_path,
+        # Проверяем существование файла перед отправкой
+        if not os.path.exists(img_path):
+            raise HTTPException(status_code=500, detail="Файл изображения не был создан")
+            
+        # Читаем содержимое файла
+        with open(img_path, 'rb') as f:
+            image_data = f.read()
+            
+        # Удаляем файл после чтения
+        os.remove(img_path)
+        logging.info(f"Временный файл {img_path} удален")
+        
+        # Возвращаем содержимое файла напрямую
+        return Response(
+            content=image_data,
             media_type='image/jpeg',
-            filename='chart.jpeg',
-            background=None  # Это важно для асинхронной отправки файла
+            headers={
+                'Content-Disposition': 'attachment; filename="chart.jpeg"'
+            }
         )
         
     except Exception as e:
         logging.error(f"Ошибка при создании графика: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Ошибка при создании графика")
     finally:
-        # Удаляем временный файл после отправки
-        try:
-            if os.path.exists(img_path):
+        # Удаляем файл, если он все еще существует
+        if img_path and os.path.exists(img_path):
+            try:
                 os.remove(img_path)
-                logging.info(f"Временный файл {img_path} удален")
-        except Exception as e:
-            logging.error(f"Ошибка при удалении временного файла: {str(e)}")
+                logging.info(f"Временный файл {img_path} удален в блоке finally")
+            except Exception as e:
+                logging.error(f"Ошибка при удалении временного файла: {str(e)}")
