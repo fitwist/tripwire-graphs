@@ -16,4 +16,4 @@ COPY . .
 EXPOSE 8080
 
 # Команда запуска
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--por]()
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
