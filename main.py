@@ -157,104 +157,113 @@ def create_chart(result_lst):
                                                   "ticktext": ['Новичок', 'Падаван', 'Рыцарь-Джедай', 'Мастер-Джедай'],
                                                   "range": [0, 20]}})
         
-        # Создаем буфер в памяти вместо сохранения на диск
-        img_buffer = io.BytesIO()
-        fig.write_image(img_buffer, format='jpeg')
-        img_buffer.seek(0)  # Перемещаем указатель в начало буфера
+        # Создаем временный файл в /tmp
+        unix_timestamp = int(time.time())
+        img_path = f'/tmp/{unix_timestamp}.jpeg'
         
-        # Отправляем изображение напрямую из памяти
-        files = {'file': ('chart.jpeg', img_buffer, 'image/jpeg')}
-        data = {'api_key': IMGHIPPO_API_KEY}
+        # Сохраняем изображение
+        fig.write_image(img_path)
+        logging.info(f"Изображение сохранено во временный файл: {img_path}")
         
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Accept': 'application/json,application/xml,application/xhtml+xml,text/html;q=0.9,text/plain;q=0.8,image/png,*/*;q=0.5',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'Connection': 'keep-alive'
-        }
-        
-        logging.info("Отправка запроса на imghippo.com...")
-        response = requests.post('https://api.imghippo.com/v1/upload', 
-                              data=data, 
-                              files=files, 
-                              headers=headers)
-        
-        logging.info(f"Ответ от imghippo.com: {response.status_code}")
-        logging.info(f"Content-Type: {response.headers.get('Content-Type')}")
-        logging.info(f"Response headers: {dict(response.headers)}")
-        
-        if response.status_code == 200:
-            try:
-                # Декодируем сжатый ответ
-                content = response.content
-                content_encoding = response.headers.get('Content-Encoding', '').lower()
-                logging.info(f"Content-Encoding: {content_encoding}")
-                
-                if content_encoding == 'br':
-                    import brotli
-                    try:
-                        content = brotli.decompress(content)
-                        logging.info("Успешно распаковано с помощью Brotli")
-                    except Exception as e:
-                        logging.error(f"Ошибка при распаковке Brotli: {str(e)}")
-                        content = response.content
-                elif content_encoding == 'gzip':
-                    import gzip
-                    try:
-                        content = gzip.decompress(content)
-                        logging.info("Успешно распаковано с помощью Gzip")
-                    except Exception as e:
-                        logging.error(f"Ошибка при распаковке Gzip: {str(e)}")
-                        content = response.content
-                
-                # Пробуем декодировать как JSON
+        # Открываем изображение
+        with open(img_path, 'rb') as img_file:
+            files = {'file': img_file}
+            data = {'api_key': IMGHIPPO_API_KEY}
+            
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'application/json,application/xml,application/xhtml+xml,text/html;q=0.9,text/plain;q=0.8,image/png,*/*;q=0.5',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Connection': 'keep-alive'
+            }
+            
+            logging.info("Отправка запроса на imghippo.com...")
+            response = requests.post('https://api.imghippo.com/v1/upload', 
+                                  data=data, 
+                                  files=files, 
+                                  headers=headers)
+            
+            logging.info(f"Ответ от imghippo.com: {response.status_code}")
+            logging.info(f"Content-Type: {response.headers.get('Content-Type')}")
+            logging.info(f"Response headers: {dict(response.headers)}")
+            
+            if response.status_code == 200:
                 try:
-                    response_data = json.loads(content)
-                    logging.info(f"Успешно декодирован JSON: {response_data}")
-                    if response_data.get('success'):
-                        image_url = response_data['data']['url']
-                        logging.info(f"Изображение успешно загружено: {image_url}")
-                        return image_url
-                    else:
-                        error_msg = response_data.get('message', 'Неизвестная ошибка')
-                        logging.error(f"Ошибка загрузки изображения: {error_msg}")
-                        raise HTTPException(status_code=500, detail=f"Ошибка загрузки изображения: {error_msg}")
-                except json.JSONDecodeError as e:
-                    logging.error(f"Ошибка декодирования JSON: {str(e)}")
-                    logging.error(f"Содержимое ответа: {content[:500]}...")
-                    raise
-            except Exception as e:
-                content_type = response.headers.get('Content-Type', '')
-                if 'application/json' in content_type:
-                    logging.error("Не удалось распарсить JSON ответ")
-                    raise HTTPException(status_code=500, detail="Ошибка при обработке ответа от сервера")
-                else:
-                    image_url = response.headers.get('Location') or content.decode('utf-8').strip()
-                    if image_url:
-                        if image_url.startswith(('http://', 'https://')):
-                            logging.info(f"Изображение успешно загружено (не-JSON ответ): {image_url}")
+                    # Декодируем сжатый ответ
+                    content = response.content
+                    content_encoding = response.headers.get('Content-Encoding', '').lower()
+                    logging.info(f"Content-Encoding: {content_encoding}")
+                    
+                    if content_encoding == 'br':
+                        import brotli
+                        try:
+                            content = brotli.decompress(content)
+                            logging.info("Успешно распаковано с помощью Brotli")
+                        except Exception as e:
+                            logging.error(f"Ошибка при распаковке Brotli: {str(e)}")
+                            content = response.content
+                    elif content_encoding == 'gzip':
+                        import gzip
+                        try:
+                            content = gzip.decompress(content)
+                            logging.info("Успешно распаковано с помощью Gzip")
+                        except Exception as e:
+                            logging.error(f"Ошибка при распаковке Gzip: {str(e)}")
+                            content = response.content
+                    
+                    # Пробуем декодировать как JSON
+                    try:
+                        response_data = json.loads(content)
+                        logging.info(f"Успешно декодирован JSON: {response_data}")
+                        if response_data.get('success'):
+                            image_url = response_data['data']['url']
+                            logging.info(f"Изображение успешно загружено: {image_url}")
                             return image_url
                         else:
-                            try:
-                                import base64
-                                decoded_url = base64.b64decode(image_url).decode('utf-8')
-                                if decoded_url.startswith(('http://', 'https://')):
-                                    logging.info(f"Изображение успешно загружено (base64 декодированный): {decoded_url}")
-                                    return decoded_url
-                            except:
-                                logging.error(f"Не удалось декодировать URL как base64: {image_url}")
-                                pass
-                    raise HTTPException(status_code=500, detail="Не удалось получить валидный URL изображения из ответа")
-        else:
-            logging.error(f"Ошибка HTTP: {response.status_code} - {response.text}")
-            raise HTTPException(status_code=500, detail=f"Ошибка загрузки изображения: {response.status_code}")
+                            error_msg = response_data.get('message', 'Неизвестная ошибка')
+                            logging.error(f"Ошибка загрузки изображения: {error_msg}")
+                            raise HTTPException(status_code=500, detail=f"Ошибка загрузки изображения: {error_msg}")
+                    except json.JSONDecodeError as e:
+                        logging.error(f"Ошибка декодирования JSON: {str(e)}")
+                        logging.error(f"Содержимое ответа: {content[:500]}...")
+                        raise
+                except Exception as e:
+                    content_type = response.headers.get('Content-Type', '')
+                    if 'application/json' in content_type:
+                        logging.error("Не удалось распарсить JSON ответ")
+                        raise HTTPException(status_code=500, detail="Ошибка при обработке ответа от сервера")
+                    else:
+                        image_url = response.headers.get('Location') or content.decode('utf-8').strip()
+                        if image_url:
+                            if image_url.startswith(('http://', 'https://')):
+                                logging.info(f"Изображение успешно загружено (не-JSON ответ): {image_url}")
+                                return image_url
+                            else:
+                                try:
+                                    import base64
+                                    decoded_url = base64.b64decode(image_url).decode('utf-8')
+                                    if decoded_url.startswith(('http://', 'https://')):
+                                        logging.info(f"Изображение успешно загружено (base64 декодированный): {decoded_url}")
+                                        return decoded_url
+                                except:
+                                    logging.error(f"Не удалось декодировать URL как base64: {image_url}")
+                                    pass
+                        raise HTTPException(status_code=500, detail="Не удалось получить валидный URL изображения из ответа")
+            else:
+                logging.error(f"Ошибка HTTP: {response.status_code} - {response.text}")
+                raise HTTPException(status_code=500, detail=f"Ошибка загрузки изображения: {response.status_code}")
     except Exception as e:
         logging.error(f"Ошибка при работе с изображением: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Ошибка при работе с изображением: {str(e)}")
     finally:
-        # Закрываем буфер
-        img_buffer.close()
+        # Удаляем временный файл
+        try:
+            if os.path.exists(img_path):
+                os.remove(img_path)
+                logging.info(f"Временный файл {img_path} удален")
+        except Exception as e:
+            logging.error(f"Ошибка при удалении временного файла: {str(e)}")
 
 
 @app.get("/")
