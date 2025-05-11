@@ -38,6 +38,9 @@ logging.info("="*50)
 
 app = FastAPI()
 
+# Монтируем статические файлы
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 # Middleware для логирования запросов
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
@@ -205,8 +208,12 @@ async def build_chart(data: ChartData):
         # Получаем путь к файлу
         img_path = create_chart(data_lst)
         
-        # Возвращаем путь к файлу
-        return {"image_path": img_path}
+        # Формируем полный URL для изображения
+        base_url = "https://tripwire-graphs.onrender.com"
+        image_url = f"{base_url}/{img_path}"
+        
+        # Возвращаем URL изображения
+        return {"image_url": image_url}
         
     except Exception as e:
         logging.error(f"Ошибка при создании графика: {str(e)}", exc_info=True)
