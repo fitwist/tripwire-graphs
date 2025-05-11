@@ -157,15 +157,18 @@ def create_chart(result_lst):
                                                   "ticktext": ['Новичок', 'Падаван', 'Рыцарь-Джедай', 'Мастер-Джедай'],
                                                   "range": [0, 20]}})
         
-        # Создаем временный файл в /tmp
+        # Создаем директорию static, если она не существует
+        os.makedirs('static', exist_ok=True)
+        
+        # Создаем файл в static с уникальным именем
         unix_timestamp = int(time.time())
-        img_path = f'/tmp/{unix_timestamp}.jpeg'
+        img_path = f'static/chart_{unix_timestamp}.jpeg'
         
         # Сохраняем изображение
         fig.write_image(img_path)
-        logging.info(f"Изображение сохранено во временный файл: {img_path}")
+        logging.info(f"Изображение сохранено в файл: {img_path}")
         
-        return img_path  # Возвращаем путь к файлу вместо URL
+        return img_path
         
     except Exception as e:
         logging.error(f"Ошибка при работе с изображением: {str(e)}", exc_info=True)
@@ -195,7 +198,6 @@ async def get_favicon():
 
 @app.post("/chart/")
 async def build_chart(data: ChartData):
-    img_path = None
     try:
         data_dict = data.dict()
         data_lst = list(data_dict.values())
@@ -203,35 +205,9 @@ async def build_chart(data: ChartData):
         # Получаем путь к файлу
         img_path = create_chart(data_lst)
         
-        # Проверяем существование файла перед отправкой
-        if not os.path.exists(img_path):
-            raise HTTPException(status_code=500, detail="Файл изображения не был создан")
-            
-        # Читаем содержимое файла
-        with open(img_path, 'rb') as f:
-            image_data = f.read()
-            
-        # Удаляем файл после чтения
-        os.remove(img_path)
-        logging.info(f"Временный файл {img_path} удален")
-        
-        # Возвращаем содержимое файла напрямую
-        return Response(
-            content=image_data,
-            media_type='image/jpeg',
-            headers={
-                'Content-Disposition': 'attachment; filename="chart.jpeg"'
-            }
-        )
+        # Возвращаем путь к файлу
+        return {"image_path": img_path}
         
     except Exception as e:
         logging.error(f"Ошибка при создании графика: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Ошибка при создании графика")
-    finally:
-        # Удаляем файл, если он все еще существует
-        if img_path and os.path.exists(img_path):
-            try:
-                os.remove(img_path)
-                logging.info(f"Временный файл {img_path} удален в блоке finally")
-            except Exception as e:
-                logging.error(f"Ошибка при удалении временного файла: {str(e)}")
